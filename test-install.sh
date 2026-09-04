@@ -45,6 +45,31 @@ hasnot "preflight/missing jq wrote nothing" "$(ls "$FAKE/.claude")" "statusline.
 rm -rf "$shim"
 teardown
 
+# --- payload digest ----------------------------------------------------
+setup
+out=$(installer)
+has "digest/good digest installs" "$out" "installed"
+eq  "digest/target exists" "$([[ -f $FAKE/.claude/statusline.sh ]] && echo yes)" "yes"
+eq  "digest/target is executable" "$([[ -x $FAKE/.claude/statusline.sh ]] && echo yes)" "yes"
+eq  "digest/target matches payload" \
+    "$(sha256sum < "$FAKE/.claude/statusline.sh" | cut -d' ' -f1)" \
+    "$(sha256sum < "$REPO_DIR/statusline.sh" | cut -d' ' -f1)"
+teardown
+
+setup
+tampered=$(mktemp)
+cat "$REPO_DIR/statusline.sh" > "$tampered"
+printf '\n# tampered\n' >> "$tampered"
+PAYLOAD="$tampered"
+out=$(installer)
+has "digest/mismatch is reported"  "$out" "digest mismatch"
+has "digest/mismatch shows expected" "$out" "expected:"
+has "digest/mismatch shows got"      "$out" "got:"
+installer >/dev/null 2>&1; eq "digest/mismatch exits 1" "$?" "1"
+eq "digest/mismatch installed nothing" "$([[ -e $FAKE/.claude/statusline.sh ]] && echo yes || echo no)" "no"
+rm -f "$tampered"
+teardown
+
 echo
 echo "passed: $PASS   failed: $FAIL"
 [[ $FAIL -eq 0 ]]

@@ -16,7 +16,7 @@ set -uo pipefail
 
 # Injected by scripts/release.sh — the pinned payload and its digest.
 VERSION="v0.0.0-dev"
-SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+SHA256="c1f2651bb438e5819a2c8b273f77756a45c203058e2a18da2e789e7855f4c195"
 
 REPO="Galfurian/claude-statusline"
 CLAUDE_DIR="${HOME}/.claude"
@@ -81,10 +81,39 @@ sha_of() {
     fi
 }
 
+# STATUSLINE_PAYLOAD_FILE is a test hook: it substitutes a local file for
+# the download. The digest is verified either way, so the hook cannot be
+# used to smuggle an unverified payload past the check.
+fetch_payload() {
+    PAYLOAD=$(mktemp) || die "cannot create a temp file"
+    if [[ -n ${STATUSLINE_PAYLOAD_FILE:-} ]]; then
+        cp "$STATUSLINE_PAYLOAD_FILE" "$PAYLOAD" || die "cannot read ${STATUSLINE_PAYLOAD_FILE}"
+    else
+        local url="https://github.com/${REPO}/releases/download/${VERSION}/statusline.sh"
+        curl -fsSL "$url" -o "$PAYLOAD" || { rm -f "$PAYLOAD"; die "download failed: ${url}"; }
+    fi
+
+    local got
+    got=$(sha_of "$PAYLOAD")
+    if [[ $got != "$SHA256" ]]; then
+        rm -f "$PAYLOAD"
+        printf 'error: digest mismatch, refusing to install\n  expected: %s\n  got:      %s\n' \
+            "$SHA256" "$got" >&2
+        exit 1
+    fi
+}
+
+install_payload() {
+    install -m 755 "$PAYLOAD" "$TARGET" || die "cannot write ${TARGET}"
+    rm -f "$PAYLOAD"
+    note "installed ${TARGET} (${VERSION})"
+}
+
 main() {
     parse_args "$@"
     preflight
-    note "preflight ok (${VERSION})"
+    fetch_payload
+    install_payload
 }
 
 main "$@"
