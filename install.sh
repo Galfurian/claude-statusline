@@ -15,7 +15,7 @@
 set -uo pipefail
 
 # Injected by scripts/release.sh — the pinned payload and its digest.
-VERSION="v0.0.0-dev"
+VERSION="v1.0.0"
 SHA256="3c11f8ff97a90e69b0918bbf4530ce49099b1901c3a25a5a180644a1128fd64a"
 
 REPO="Galfurian/claude-statusline"
