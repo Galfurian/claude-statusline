@@ -140,6 +140,39 @@ eq "conflict/--force replaces" \
 eq "conflict/--force keeps other keys" "$(jq -r '.keep' "$FAKE/.claude/settings.json")" "me"
 teardown
 
+# --- dry-run, uninstall, idempotency -----------------------------------
+setup
+out=$(installer --dry-run)
+has "dry-run/announces itself"      "$out" "dry-run"
+has "dry-run/names the target"      "$out" "statusline.sh"
+eq  "dry-run/wrote no script"       "$([[ -e $FAKE/.claude/statusline.sh ]] && echo yes || echo no)" "no"
+eq  "dry-run/wrote no settings"     "$([[ -e $FAKE/.claude/settings.json ]] && echo yes || echo no)" "no"
+installer --dry-run >/dev/null; eq "dry-run/exits 0" "$?" "0"
+teardown
+
+setup                                    # a second run must be a no-op
+installer >/dev/null
+first=$(cat "$FAKE/.claude/settings.json")
+out=$(installer)
+has "idempotent/second run says already current" "$out" "already"
+eq  "idempotent/settings unchanged" "$(cat "$FAKE/.claude/settings.json")" "$first"
+eq  "idempotent/one backup only"    "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "0"
+teardown
+
+setup                                    # uninstall leaves the neighbours alone
+cat > "$FAKE/.claude/settings.json" <<'JSON'
+{"theme":"dark","autoMode":true}
+JSON
+installer >/dev/null
+out=$(installer --uninstall)
+has "uninstall/says so"            "$out" "removed"
+eq  "uninstall/script is gone"     "$([[ -e $FAKE/.claude/statusline.sh ]] && echo yes || echo no)" "no"
+eq  "uninstall/key is gone"        "$(jq -r '.statusLine // "none"' "$FAKE/.claude/settings.json")" "none"
+eq  "uninstall/theme survives"     "$(jq -r '.theme' "$FAKE/.claude/settings.json")" "dark"
+eq  "uninstall/autoMode survives"  "$(jq -r '.autoMode' "$FAKE/.claude/settings.json")" "true"
+installer --uninstall >/dev/null 2>&1; eq "uninstall/is idempotent, exits 0" "$?" "0"
+teardown
+
 echo
 echo "passed: $PASS   failed: $FAIL"
 [[ $FAIL -eq 0 ]]

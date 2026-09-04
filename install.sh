@@ -185,22 +185,87 @@ resolve_conflict() {
     exit 2
 }
 
+plan_only() {
+    local state="$1"
+    printf 'dry-run: nothing will be written.\n'
+    printf 'dry-run: would install %s (%s)\n' "$TARGET" "$VERSION"
+    case $state in
+        fresh)   printf 'dry-run: would add .statusLine to %s\n' "$SETTINGS" ;;
+        ours)    printf 'dry-run: would refresh the script; %s already points here\n' "$SETTINGS" ;;
+        foreign) printf 'dry-run: would ask before replacing "%s" in %s\n' "$(read_statusline)" "$SETTINGS" ;;
+    esac
+    exit 0
+}
+
+uninstall() {
+    local removed=0
+
+    if [[ -e $TARGET ]]; then
+        if (( DRY_RUN )); then
+            printf 'dry-run: would remove %s\n' "$TARGET"
+        else
+            rm -f "$TARGET" || die "cannot remove ${TARGET}"
+            note "removed ${TARGET}"
+        fi
+        removed=1
+    fi
+
+    if [[ -f $SETTINGS ]] && [[ $(read_statusline) == "$COMMAND" ]]; then
+        if (( DRY_RUN )); then
+            printf 'dry-run: would remove .statusLine from %s\n' "$SETTINGS"
+        else
+            jq -e . "$SETTINGS" >/dev/null 2>&1 \
+                || die "${SETTINGS} is not valid JSON — leaving it untouched"
+            note "backed up $(backup_settings)"
+            local tmp
+            tmp=$(mktemp) || die "cannot create a temp file"
+            jq 'del(.statusLine)' "$SETTINGS" > "$tmp" \
+                || { rm -f "$tmp"; die "the jq edit failed — ${SETTINGS} is untouched"; }
+            jq -e . "$tmp" >/dev/null 2>&1 \
+                || { rm -f "$tmp"; die "produced invalid JSON — ${SETTINGS} is untouched"; }
+            mv "$tmp" "$SETTINGS" || { rm -f "$tmp"; die "cannot replace ${SETTINGS}"; }
+            note "removed .statusLine from ${SETTINGS}"
+        fi
+        removed=1
+    fi
+
+    (( removed )) || note "nothing to remove"
+    exit 0
+}
+
 main() {
     parse_args "$@"
     preflight
 
+    [[ $ACTION == uninstall ]] && uninstall
+
     local state
     state=$(classify_existing)
+
+    (( DRY_RUN )) && plan_only "$state"
+
+    # settings.json already points at us, so this is an update whatever the
+    # state of the file on disk: refresh the script, never touch the key.
+    # If the script is already the pinned one, say so and stop, so running
+    # the one-liner twice is harmless.
+    if [[ $state == ours ]]; then
+        fetch_payload
+        if [[ -x $TARGET && $(sha_of "$TARGET") == "$SHA256" ]]; then
+            rm -f "$PAYLOAD"
+            note "already at ${VERSION} — nothing to do"
+            exit 0
+        fi
+        install_payload
+        note "update only — settings.json already points here, leaving it alone"
+        note "done — restart Claude Code to pick it up"
+        exit 0
+    fi
+
     [[ $state == foreign ]] && resolve_conflict
 
     fetch_payload
     install_payload
-
-    if [[ $state == ours ]]; then
-        note "update only — settings.json already points here, leaving it alone"
-    else
-        write_statusline_key
-    fi
+    write_statusline_key
     note "done — start a new Claude Code session to see it"
 }
 
