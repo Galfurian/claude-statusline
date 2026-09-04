@@ -103,6 +103,43 @@ eq "settings/invalid json untouched" \
    "$(cat "$FAKE/.claude/settings.json")" "{ this is not json"
 teardown
 
+# --- conflicts ---------------------------------------------------------
+setup                                    # ours already there: an update
+cat > "$FAKE/.claude/settings.json" <<'JSON'
+{"theme":"dark","statusLine":{"type":"command","command":"bash ~/.claude/statusline.sh"}}
+JSON
+before=$(cat "$FAKE/.claude/settings.json")
+out=$(installer)
+has "conflict/ours says update" "$out" "update"
+eq  "conflict/ours leaves settings byte-identical" "$(cat "$FAKE/.claude/settings.json")" "$before"
+eq  "conflict/ours takes no backup" "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "0"
+eq  "conflict/ours still refreshed the script" \
+    "$([[ -x $FAKE/.claude/statusline.sh ]] && echo yes)" "yes"
+teardown
+
+setup                                    # someone else's, no tty
+cat > "$FAKE/.claude/settings.json" <<'JSON'
+{"statusLine":{"type":"command","command":"bash ~/.claude/other-tool.sh"}}
+JSON
+out=$(installer < /dev/null)
+has "conflict/foreign reports what it found" "$out" "other-tool.sh"
+has "conflict/foreign suggests --force"      "$out" "--force"
+installer < /dev/null >/dev/null 2>&1; eq "conflict/foreign exits 2" "$?" "2"
+eq "conflict/foreign kept the foreign command" \
+   "$(jq -r '.statusLine.command' "$FAKE/.claude/settings.json")" "bash ~/.claude/other-tool.sh"
+eq "conflict/foreign took a backup" "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "1"
+teardown
+
+setup                                    # someone else's, with --force
+cat > "$FAKE/.claude/settings.json" <<'JSON'
+{"keep":"me","statusLine":{"type":"command","command":"bash ~/.claude/other-tool.sh"}}
+JSON
+installer --force < /dev/null >/dev/null
+eq "conflict/--force replaces" \
+   "$(jq -r '.statusLine.command' "$FAKE/.claude/settings.json")" "bash ~/.claude/statusline.sh"
+eq "conflict/--force keeps other keys" "$(jq -r '.keep' "$FAKE/.claude/settings.json")" "me"
+teardown
+
 echo
 echo "passed: $PASS   failed: $FAIL"
 [[ $FAIL -eq 0 ]]

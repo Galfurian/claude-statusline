@@ -144,12 +144,63 @@ write_statusline_key() {
     note "configured ${SETTINGS}"
 }
 
+classify_existing() {
+    local current
+    current=$(read_statusline)
+    if   [[ -z $current ]];            then printf 'fresh\n'
+    elif [[ $current == "$COMMAND" ]]; then printf 'ours\n'
+    else                                    printf 'foreign\n'
+    fi
+}
+
+# Only reached for a foreign statusLine. --force proceeds; a terminal gets
+# asked; a pipe gets the prudent path, because a question nobody can answer
+# is not a safeguard.
+resolve_conflict() {
+    local current
+    current=$(read_statusline)
+
+    if (( FORCE )); then
+        note "replacing the existing statusLine (--force): ${current}"
+        return 0
+    fi
+
+    printf 'found another statusLine already configured:\n    %s\n' "$current"
+
+    # No backup on the paths that proceed: write_statusline_key takes one
+    # right before it changes anything. A backup is only worth taking here
+    # on the paths that stop, where nothing else will take it.
+    if [[ -t 0 ]]; then
+        local answer=""
+        read -r -p "replace it with claude-statusline? [y/N] " answer
+        case $answer in
+            [yY]|[yY][eE][sS]) return 0 ;;
+        esac
+        note "left as it was — nothing changed"
+        exit 2
+    fi
+
+    note "backed up $(backup_settings)"
+    printf 'not replacing it. To replace it, run:\n    bash install.sh --force\n'
+    exit 2
+}
+
 main() {
     parse_args "$@"
     preflight
+
+    local state
+    state=$(classify_existing)
+    [[ $state == foreign ]] && resolve_conflict
+
     fetch_payload
     install_payload
-    write_statusline_key
+
+    if [[ $state == ours ]]; then
+        note "update only — settings.json already points here, leaving it alone"
+    else
+        write_statusline_key
+    fi
     note "done — start a new Claude Code session to see it"
 }
 
