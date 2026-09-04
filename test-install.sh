@@ -70,6 +70,39 @@ eq "digest/mismatch installed nothing" "$([[ -e $FAKE/.claude/statusline.sh ]] &
 rm -f "$tampered"
 teardown
 
+# --- settings.json -----------------------------------------------------
+setup                                    # no settings.json at all
+installer >/dev/null
+eq "settings/created from nothing" \
+   "$(jq -r '.statusLine.command' "$FAKE/.claude/settings.json")" \
+   "bash ~/.claude/statusline.sh"
+eq "settings/type is command" \
+   "$(jq -r '.statusLine.type' "$FAKE/.claude/settings.json")" "command"
+teardown
+
+setup                                    # existing keys must survive
+cat > "$FAKE/.claude/settings.json" <<'JSON'
+{"theme":"dark","autoMode":true,"permissions":{"allow":["Bash(ls:*)"]}}
+JSON
+installer >/dev/null
+eq "settings/theme survives"       "$(jq -r '.theme' "$FAKE/.claude/settings.json")" "dark"
+eq "settings/autoMode survives"    "$(jq -r '.autoMode' "$FAKE/.claude/settings.json")" "true"
+eq "settings/permissions survive"  "$(jq -r '.permissions.allow[0]' "$FAKE/.claude/settings.json")" "Bash(ls:*)"
+eq "settings/statusLine added"     "$(jq -r '.statusLine.command' "$FAKE/.claude/settings.json")" "bash ~/.claude/statusline.sh"
+eq "settings/backup was taken"     "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "1"
+eq "settings/backup holds the original" \
+   "$(jq -r '.statusLine // "none"' "$FAKE"/.claude/settings.json.bak.*)" "none"
+teardown
+
+setup                                    # invalid JSON must be left alone
+printf '{ this is not json' > "$FAKE/.claude/settings.json"
+out=$(installer)
+has "settings/invalid json reported" "$out" "not valid JSON"
+installer >/dev/null 2>&1; eq "settings/invalid json exits 1" "$?" "1"
+eq "settings/invalid json untouched" \
+   "$(cat "$FAKE/.claude/settings.json")" "{ this is not json"
+teardown
+
 echo
 echo "passed: $PASS   failed: $FAIL"
 [[ $FAIL -eq 0 ]]

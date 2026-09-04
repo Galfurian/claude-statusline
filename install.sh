@@ -109,11 +109,48 @@ install_payload() {
     note "installed ${TARGET} (${VERSION})"
 }
 
+read_statusline() {
+    [[ -f $SETTINGS ]] || { printf '' ; return 0; }
+    jq -r '.statusLine.command // ""' "$SETTINGS" 2>/dev/null || printf ''
+}
+
+backup_settings() {
+    local path="${SETTINGS}.bak.$(date +%Y%m%d_%H%M%S)"
+    cp "$SETTINGS" "$path" || die "cannot write the backup ${path}"
+    printf '%s\n' "$path"
+}
+
+# Temp file, validate, then mv. If the merge fails the original is never
+# opened for writing, and the user gets the manual command instead of a
+# truncated settings file.
+write_statusline_key() {
+    local tmp
+    tmp=$(mktemp) || die "cannot create a temp file"
+
+    if [[ -f $SETTINGS ]]; then
+        jq -e . "$SETTINGS" >/dev/null 2>&1 \
+            || die "${SETTINGS} is not valid JSON — leaving it untouched. Fix it, then run this again."
+        note "backed up $(backup_settings)"
+        jq --arg c "$COMMAND" '.statusLine = {type: "command", command: $c}' "$SETTINGS" > "$tmp" \
+            || { rm -f "$tmp"; die "the jq merge failed — ${SETTINGS} is untouched. Add this key by hand: \"statusLine\": {\"type\": \"command\", \"command\": \"${COMMAND}\"}"; }
+    else
+        jq -n --arg c "$COMMAND" '{statusLine: {type: "command", command: $c}}' > "$tmp" \
+            || { rm -f "$tmp"; die "cannot generate ${SETTINGS}"; }
+    fi
+
+    jq -e . "$tmp" >/dev/null 2>&1 \
+        || { rm -f "$tmp"; die "produced invalid JSON — ${SETTINGS} is untouched"; }
+    mv "$tmp" "$SETTINGS" || { rm -f "$tmp"; die "cannot replace ${SETTINGS}"; }
+    note "configured ${SETTINGS}"
+}
+
 main() {
     parse_args "$@"
     preflight
     fetch_payload
     install_payload
+    write_statusline_key
+    note "done — start a new Claude Code session to see it"
 }
 
 main "$@"
