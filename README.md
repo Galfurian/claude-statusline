@@ -51,6 +51,13 @@ bash 4.2 or newer and `jq`. `git` is optional — without it you simply lose the
 branch segment. macOS ships bash 3.2, so `brew install bash` is needed there;
 the installer checks this and says so rather than half-installing.
 
+A reasonably recent Claude Code, too. The context bar needs
+`context_window.used_percentage` in the JSON Claude Code writes to the
+statusline's stdin, and the two rate-limit bars need `rate_limits` — added in
+roughly v2.1.6 and v2.1.80. Every segment hides itself when its field is
+absent, so on an older Claude Code nothing breaks: you get the first line and
+no bars, which is worth knowing before you go looking for the bug.
+
 ## Why you can check this before running it
 
 Piping a stranger's script into your shell deserves some scepticism, so:
