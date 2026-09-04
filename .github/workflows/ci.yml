@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash and jq versions
+        run: bash --version | head -1 && jq --version
+
+      - name: shellcheck
+        run: shellcheck -S warning statusline.sh install.sh test.sh test-install.sh scripts/*.sh
+
+      - name: render tests
+        run: ./test.sh
+
+      - name: installer tests
+        run: ./test-install.sh
+
+      # The installer pins a digest. If statusline.sh changed without
+      # scripts/sync-digest.sh being run, the pin is a lie — fail here
+      # rather than ship a release that cannot install itself.
+      - name: digest is in sync
+        run: |
+          ./scripts/sync-digest.sh
+          git diff --exit-code install.sh

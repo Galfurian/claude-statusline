@@ -32,7 +32,8 @@ G_EMPTY=${G_EMPTY:-░}
 
 # ---------------------------------------------------------------- colours
 if [[ -n ${NO_COLOR:-} ]]; then
-    C_OFF= C_DIM= C_TRACK= C_GREEN= C_YELLOW= C_ORANGE= C_RED= C_TEXT=
+    C_OFF='' C_DIM='' C_TRACK='' C_TEXT=''
+    C_GREEN='' C_YELLOW='' C_ORANGE='' C_RED=''
 else
     C_OFF=$'\033[0m'
     C_DIM=$'\033[38;5;245m'      # labels and separators
@@ -67,7 +68,7 @@ render_bar() {
     (( filled == 0 && pct > 0 )) && filled=1
     (( filled > w )) && filled=$w
 
-    local fill= track= i
+    local fill='' track='' i
     for (( i = 0; i < filled; i++ )); do fill+=$G_FILL; done
     for (( i = filled; i < w; i++ )); do track+=$G_EMPTY; done
 
@@ -133,7 +134,7 @@ IFS=$'\x1f' read -r ctx_pct ctx_size l5_pct l5_reset l7_pct model dir cost added
 
 # ---------------------------------------------------------------- git
 # A single `git status` yields branch, divergence and dirtiness at once.
-branch= ahead= behind= dirty=
+branch='' ahead='' behind='' dirty=''
 if [[ -n $dir && -d $dir ]]; then
     if gitout=$(cd "$dir" 2>/dev/null && git status --porcelain=v2 --branch 2>/dev/null); then
         while IFS= read -r line; do

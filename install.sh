@@ -16,7 +16,7 @@ set -uo pipefail
 
 # Injected by scripts/release.sh — the pinned payload and its digest.
 VERSION="v0.0.0-dev"
-SHA256="c1f2651bb438e5819a2c8b273f77756a45c203058e2a18da2e789e7855f4c195"
+SHA256="3c11f8ff97a90e69b0918bbf4530ce49099b1901c3a25a5a180644a1128fd64a"
 
 REPO="Galfurian/claude-statusline"
 CLAUDE_DIR="${HOME}/.claude"
@@ -115,7 +115,8 @@ read_statusline() {
 }
 
 backup_settings() {
-    local path="${SETTINGS}.bak.$(date +%Y%m%d_%H%M%S)"
+    local path
+    path="${SETTINGS}.bak.$(date +%Y%m%d_%H%M%S)"
     cp "$SETTINGS" "$path" || die "cannot write the backup ${path}"
     printf '%s\n' "$path"
 }

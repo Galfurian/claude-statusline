@@ -18,6 +18,15 @@ setup() {
 }
 teardown() { rm -rf "$FAKE"; }
 
+# Counts settings.json backups with a glob: ls | grep chokes on odd names.
+count_backups() {
+    local n=0 f
+    for f in "$FAKE"/.claude/settings.json.bak.*; do
+        [[ -e $f ]] && n=$((n+1))
+    done
+    printf '%d\n' "$n"
+}
+
 # Runs the installer with a fake HOME and the payload taken from disk.
 installer() {
     HOME="$FAKE" STATUSLINE_PAYLOAD_FILE="$PAYLOAD" bash "$INSTALLER" "$@" 2>&1
@@ -89,7 +98,7 @@ eq "settings/theme survives"       "$(jq -r '.theme' "$FAKE/.claude/settings.jso
 eq "settings/autoMode survives"    "$(jq -r '.autoMode' "$FAKE/.claude/settings.json")" "true"
 eq "settings/permissions survive"  "$(jq -r '.permissions.allow[0]' "$FAKE/.claude/settings.json")" "Bash(ls:*)"
 eq "settings/statusLine added"     "$(jq -r '.statusLine.command' "$FAKE/.claude/settings.json")" "bash ~/.claude/statusline.sh"
-eq "settings/backup was taken"     "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "1"
+eq "settings/backup was taken"     "$(count_backups)" "1"
 eq "settings/backup holds the original" \
    "$(jq -r '.statusLine // "none"' "$FAKE"/.claude/settings.json.bak.*)" "none"
 teardown
@@ -112,7 +121,7 @@ before=$(cat "$FAKE/.claude/settings.json")
 out=$(installer)
 has "conflict/ours says update" "$out" "update"
 eq  "conflict/ours leaves settings byte-identical" "$(cat "$FAKE/.claude/settings.json")" "$before"
-eq  "conflict/ours takes no backup" "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "0"
+eq  "conflict/ours takes no backup" "$(count_backups)" "0"
 eq  "conflict/ours still refreshed the script" \
     "$([[ -x $FAKE/.claude/statusline.sh ]] && echo yes)" "yes"
 teardown
@@ -127,7 +136,7 @@ has "conflict/foreign suggests --force"      "$out" "--force"
 installer < /dev/null >/dev/null 2>&1; eq "conflict/foreign exits 2" "$?" "2"
 eq "conflict/foreign kept the foreign command" \
    "$(jq -r '.statusLine.command' "$FAKE/.claude/settings.json")" "bash ~/.claude/other-tool.sh"
-eq "conflict/foreign took a backup" "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "1"
+eq "conflict/foreign took a backup" "$(count_backups)" "1"
 teardown
 
 setup                                    # someone else's, with --force
@@ -156,7 +165,7 @@ first=$(cat "$FAKE/.claude/settings.json")
 out=$(installer)
 has "idempotent/second run says already current" "$out" "already"
 eq  "idempotent/settings unchanged" "$(cat "$FAKE/.claude/settings.json")" "$first"
-eq  "idempotent/one backup only"    "$(ls "$FAKE/.claude" | grep -c 'settings.json.bak.')" "0"
+eq  "idempotent/one backup only"    "$(count_backups)" "0"
 teardown
 
 setup                                    # uninstall leaves the neighbours alone
