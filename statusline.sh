@@ -136,7 +136,7 @@ IFS=$'\x1f' read -r ctx_pct ctx_size l5_pct l5_reset l7_pct model dir cost added
 # A single `git status` yields branch, divergence and dirtiness at once.
 branch='' ahead='' behind='' dirty=''
 if [[ -n $dir && -d $dir ]]; then
-    if gitout=$(cd "$dir" 2>/dev/null && git status --porcelain=v2 --branch 2>/dev/null); then
+    if gitout=$(cd "$dir" 2>/dev/null && git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null); then
         while IFS= read -r line; do
             case $line in
                 '# branch.head '*) branch=${line#'# branch.head '} ;;
